@@ -18,11 +18,62 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
+    public HashSet<DbTable> getDbTables() {
+        return dbTables;
+    }
+
+    public HashSet<DbTable> dbTables;
+    public  class DbTable{
+            public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public DbTable(DbFile dbFile, String name, String pkeyField) {
+            this.dbFile = dbFile;
+            this.name = name;
+            this.pkeyField = pkeyField;
+            this.tableId = dbFile.getId();
+
+        }
+
+        public DbFile getDbFile() {
+            return dbFile;
+        }
+
+        public DbFile dbFile;
+        public String name;
+
+        public int getTableId() {
+            return tableId;
+        }
+
+        public int tableId;
+
+        public String getPkeyField() {
+            return pkeyField;
+        }
+
+        public void setPkeyField(String pkeyField) {
+            this.pkeyField = pkeyField;
+        }
+
+        public String pkeyField;
+
+
+
+    }
+
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
+        this.dbTables = new HashSet<>();
+
         // some code goes here
     }
 
@@ -37,6 +88,9 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
+        DbTable dbTable = new DbTable(file,name,pkeyField);
+        this.dbTables.add(dbTable);
+
     }
 
     public void addTable(DbFile file, String name) {
@@ -60,7 +114,15 @@ public class Catalog {
      */
     public int getTableId(String name) throws NoSuchElementException {
         // some code goes here
-        return 0;
+        if (name == null)
+            throw new NoSuchElementException();
+        for (DbTable dbTable: this.dbTables
+             ) {
+            if (dbTable.name == name){
+                return dbTable.getTableId();
+            }
+        }
+        throw new NoSuchElementException();
     }
 
     /**
@@ -71,7 +133,13 @@ public class Catalog {
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        for (DbTable dbTable: this.dbTables
+             ) {
+            DbFile dbFile = dbTable.dbFile;
+            if (dbTable.getTableId() == tableid)
+                return dbFile.getTupleDesc();
+        }
+        throw new NoSuchElementException();
     }
 
     /**
@@ -81,27 +149,45 @@ public class Catalog {
      *     function passed to addTable
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
+
+        for (DbTable dbTable:this.dbTables
+             ) {
+            if (dbTable.getTableId() == tableid)
+                return dbTable.dbFile;
+        }
+        throw new NoSuchElementException();
         // some code goes here
-        return null;
     }
 
     public String getPrimaryKey(int tableid) {
+        for (DbTable dbTable:this.dbTables
+             ) {
+            if (dbTable.getTableId() == tableid)
+                return dbTable.getPkeyField();
+        }
         // some code goes here
         return null;
     }
 
     public Iterator<Integer> tableIdIterator() {
+
         // some code goes here
         return null;
     }
 
     public String getTableName(int id) {
+        for (DbTable dbTable: this.dbTables
+             ) {
+            if (dbTable.getTableId() == id)
+                return dbTable.getName();
+        }
         // some code goes here
         return null;
     }
     
     /** Delete all tables from the catalog */
     public void clear() {
+        this.dbTables = new HashSet<>();
         // some code goes here
     }
     
@@ -121,8 +207,8 @@ public class Catalog {
                 //System.out.println("TABLE NAME: " + name);
                 String fields = line.substring(line.indexOf("(") + 1, line.indexOf(")")).trim();
                 String[] els = fields.split(",");
-                ArrayList<String> names = new ArrayList<String>();
-                ArrayList<Type> types = new ArrayList<Type>();
+                HashSet<String> names = new HashSet<String>();
+                HashSet<Type> types = new HashSet<Type>();
                 String primaryKey = "";
                 for (String e : els) {
                     String[] els2 = e.trim().split(" ");

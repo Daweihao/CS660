@@ -1,5 +1,6 @@
 package simpledb;
 
+import java.math.BigInteger;
 import java.util.*;
 import java.io.*;
 
@@ -66,8 +67,7 @@ public class HeapPage implements Page {
         @return the number of tuples on this page
     */
     private int getNumTuples() {        
-        // some code goes here
-        return 0;
+        return (int)Math.floor((BufferPool.getPageSize() * 8) / (td.getSize() * 8 + 1));
 
     }
 
@@ -78,7 +78,7 @@ public class HeapPage implements Page {
     private int getHeaderSize() {        
         
         // some code goes here
-        return 0;
+        return (int)Math.ceil(this.numSlots /8);
                  
     }
     
@@ -112,7 +112,7 @@ public class HeapPage implements Page {
      */
     public HeapPageId getId() {
     // some code goes here
-    throw new UnsupportedOperationException("implement this");
+        return pid;
     }
 
     /**
@@ -282,15 +282,29 @@ public class HeapPage implements Page {
      */
     public int getNumEmptySlots() {
         // some code goes here
-        return 0;
+        int numsEmpty = 0;
+        for (int i = 0; i < numSlots; i++) {
+            if (isSlotUsed(i) == false)
+                numsEmpty++;
+        }
+        return numsEmpty;
     }
 
     /**
      * Returns true if associated slot on this page is filled.
      */
-    public boolean isSlotUsed(int i) {
-        // some code goes here
-        return false;
+    public boolean isSlotUsed(int i) throws IllegalArgumentException{
+        if (i < 0 || i > numSlots)
+            throw new IllegalArgumentException("Invalid slot number");
+        int whichByte = i / 8;
+        int whichBit = i % 8;
+
+        if (whichByte > header.length)
+            throw new IllegalArgumentException("Invalid whichByte");
+        byte[] byteArContainsI = new byte[]{header[whichByte]};
+
+        BigInteger bi = new BigInteger(byteArContainsI);
+        return bi.testBit(whichBit);
     }
 
     /**
@@ -307,8 +321,16 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return null;
+        ArrayList<Tuple> tupleInUse = new ArrayList<>();
+        for (int i = 0; i < tuples.length; i++) {
+            if (isSlotUsed(i))
+                tupleInUse.add(tuples[i]);
+        }
+        return new HeapPageIterator(tupleInUse);
     }
+
+
+
 
 }
 

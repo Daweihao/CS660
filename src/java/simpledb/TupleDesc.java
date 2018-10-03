@@ -64,10 +64,11 @@ public class TupleDesc implements Serializable {
      *            be null.
      */
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
+        this.tdList = new ArrayList<>();
         int length = typeAr.length;
         for (int i = 0; i < length ; i++) {
             TDItem tdItem = new TDItem(typeAr[i],fieldAr[i]);
-            tdList.add(tdItem);
+            this.tdList.add(tdItem);
         }
 
         // some code goes here
@@ -82,10 +83,11 @@ public class TupleDesc implements Serializable {
      *            TupleDesc. It must contain at least one entry.
      */
     public TupleDesc(Type[] typeAr) {
+        this.tdList = new ArrayList<>();
         int length = typeAr.length;
         for (int i = 0; i < length ; i++) {
             TDItem tdItem = new TDItem(typeAr[i],null);
-            tdList.add(tdItem);
+            this.tdList.add(tdItem);
         }
     }
 
@@ -145,12 +147,16 @@ public class TupleDesc implements Serializable {
      */
     public int fieldNameToIndex(String name) throws NoSuchElementException {
         // some code goes here
+        if (name == null)
+            throw new NoSuchElementException();
         for (TDItem tdItem : this.tdList)
         {
-            if (tdItem.fieldName.matches(name))
-                return tdList.indexOf(tdItem);
+            if (tdItem.fieldName != null && tdItem.fieldName.equals(name))
+                return this.tdList.indexOf(tdItem);
+            else if (tdItem.fieldName == null)
+                throw new NoSuchElementException();
         }
-        return 0;
+        throw new NoSuchElementException(name);
     }
 
     /**
@@ -163,7 +169,7 @@ public class TupleDesc implements Serializable {
             size = size + tdItem.getSize();
         }
         // some code goes here
-        return 0;
+        return size;
     }
 
     /**
@@ -185,9 +191,10 @@ public class TupleDesc implements Serializable {
 //            else
 //                typeAr[i] = td2.getFieldType(i);
 //        }
-
-        td1.tdList.addAll(td2.tdList);
-        TupleDesc td0 = new TupleDesc(td1.tdList);
+        ArrayList<TDItem> tdList1 = new ArrayList<>();
+        tdList1.addAll(td1.tdList);
+        tdList1.addAll(td2.tdList);
+        TupleDesc td0 = new TupleDesc(tdList1);
 
         // some code goes here
         return td0;
@@ -203,10 +210,14 @@ public class TupleDesc implements Serializable {
      * @return true if the object is equal to this TupleDesc.
      */
     public boolean equals(Object o) {
-        if (this.getSize() == ((TupleDesc) o).getSize()){
-            for (int i = 0; i < this.numFields(); i++) {
-                if(this.getFieldType(i) == ((TupleDesc) o).getFieldType(i))
-                    return true;
+        if (o == null)
+            return false;
+        if (o.getClass() == this.getClass()) {
+            if (this.getSize() == ((TupleDesc) o).getSize()) {
+                for (int i = 0; i < this.numFields(); i++) {
+                    if (this.getFieldType(i) == ((TupleDesc) o).getFieldType(i))
+                        return true;
+                }
             }
         }
         // some code goes here
@@ -231,7 +242,7 @@ public class TupleDesc implements Serializable {
         String organizer = "";
         for (Iterator iter = this.iterator();iter.hasNext();){
             String str = iter.next().toString();
-            organizer += str;
+            organizer += (str + ", ");
         }
         return organizer;
     }
