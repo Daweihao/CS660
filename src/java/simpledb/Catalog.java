@@ -18,11 +18,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
-    public HashSet<DbTable> getDbTables() {
-        return dbTables;
+    public Map<Integer,DbTable> getDbTables() {
+        return getDbTables();
     }
 
-    public HashSet<DbTable> dbTables;
+    public Map<Integer,DbTable> dbTables;
     public  class DbTable{
             public String getName() {
             return name;
@@ -72,7 +72,7 @@ public class Catalog {
      * Creates a new, empty catalog.
      */
     public Catalog() {
-        this.dbTables = new HashSet<>();
+        this.dbTables = new HashMap<>();
 
         // some code goes here
     }
@@ -88,8 +88,21 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
-        DbTable dbTable = new DbTable(file,name,pkeyField);
-        this.dbTables.add(dbTable);
+    	Integer itd = file.getId();
+    	if (name.equals(null))
+    		throw new IllegalArgumentException();
+    	if (dbTables.containsKey(itd)) {
+    		dbTables.remove(itd);
+    	} 
+    	
+    		for (DbTable t : dbTables.values()) {
+    			if(t.getName().equals(name)) {
+    				dbTables.remove(t.getTableId());
+    			}
+    		}
+    		DbTable dbTable = new DbTable(file,name,pkeyField);
+    		dbTables.put(itd,dbTable);
+   
 
     }
 
@@ -116,12 +129,12 @@ public class Catalog {
         // some code goes here
         if (name == null)
             throw new NoSuchElementException();
-        for (DbTable dbTable: this.dbTables
-             ) {
-            if (dbTable.name == name){
-                return dbTable.getTableId();
-            }
+        for (DbTable t : dbTables.values()) {
+        	if(t.getName().equals(name)) {
+        		return t.getTableId();
+        	}
         }
+       
         throw new NoSuchElementException();
     }
 
@@ -133,12 +146,9 @@ public class Catalog {
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes here
-        for (DbTable dbTable: this.dbTables
-             ) {
-            DbFile dbFile = dbTable.dbFile;
-            if (dbTable.getTableId() == tableid)
-                return dbFile.getTupleDesc();
-        }
+    	if (dbTables.containsKey(tableid)) {
+    		return dbTables.get(tableid).getDbFile().getTupleDesc();
+    	}
         throw new NoSuchElementException();
     }
 
@@ -150,39 +160,35 @@ public class Catalog {
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
 
-        for (DbTable dbTable:this.dbTables
-             ) {
-            if (dbTable.getTableId() == tableid)
-                return dbTable.dbFile;
+        if(dbTables.containsKey(tableid)) {
+        	return dbTables.get(tableid).getDbFile();
         }
         throw new NoSuchElementException();
         // some code goes here
     }
 
     public String getPrimaryKey(int tableid) {
-        for (DbTable dbTable:this.dbTables
-             ) {
-            if (dbTable.getTableId() == tableid)
-                return dbTable.getPkeyField();
+        if(dbTables.containsKey(tableid)) {
+        	dbTables.get(tableid).getPkeyField();
         }
         // some code goes here
-        return null;
+        throw new NoSuchElementException("No table has this table id");
     }
 
     public Iterator<Integer> tableIdIterator() {
 
         // some code goes here
-        return null;
+        return dbTables.keySet().iterator();
     }
 
     public String getTableName(int id) {
-        for (DbTable dbTable: this.dbTables
-             ) {
-            if (dbTable.getTableId() == id)
-                return dbTable.getName();
-        }
+    
+    	if(dbTables.containsKey(id)) {
+    		return dbTables.get(id).getName();
+    	}
+        
         // some code goes here
-        return null;
+        throw new NoSuchElementException("no table has this id");
     }
     
     /** Delete all tables from the catalog */
