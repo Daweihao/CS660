@@ -31,7 +31,7 @@ public class HeapFileIterator implements DbFileIterator{
             return true;
         } else if (pgNum < hf.numPages()-1){
             // if we have more pages to iterate
-            if(getTupleLsFrPg(pgNum + 1).size() != 0){
+            if(getTupleLsFrPg(pgNum + 1).size() > 0){
                 return true;
             } else {
                 return false;

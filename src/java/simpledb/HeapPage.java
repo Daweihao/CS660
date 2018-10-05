@@ -14,11 +14,11 @@ import java.io.*;
  */
 public class HeapPage implements Page {
 
-    final HeapPageId pid;
-    final TupleDesc td;
-    final byte header[];
-    final Tuple tuples[];
-    final int numSlots;
+    HeapPageId pid;
+    TupleDesc td;
+    byte header[];
+    Tuple tuples[];
+    int numSlots;
 
     byte[] oldData;
     private final Byte oldDataLock=new Byte((byte)0);
@@ -78,7 +78,7 @@ public class HeapPage implements Page {
     private int getHeaderSize() {        
         
         // some code goes here
-        return (int)Math.ceil(this.numSlots /8);
+        return (int)Math.ceil(this.numSlots /8.0);
                  
     }
     
@@ -112,6 +112,7 @@ public class HeapPage implements Page {
      */
     public HeapPageId getId() {
     // some code goes here
+
         return pid;
     }
 
@@ -122,13 +123,13 @@ public class HeapPage implements Page {
         // if associated bit is not set, read forward to the next tuple, and
         // return null.
         if (!isSlotUsed(slotId)) {
-            for (int i=0; i<td.getSize(); i++) {
+
                 try {
-                    dis.readByte();
+                    dis.skipBytes(td.getSize() * slotId);
                 } catch (IOException e) {
+                    e.printStackTrace();
                     throw new NoSuchElementException("error reading empty tuple");
                 }
-            }
             return null;
         }
 
@@ -284,8 +285,10 @@ public class HeapPage implements Page {
         // some code goes here
         int numsEmpty = 0;
         for (int i = 0; i < numSlots; i++) {
-            if (isSlotUsed(i) == false)
-                numsEmpty++;
+            if (isSlotUsed(i)) {
+                continue;
+            }
+            numsEmpty++;
         }
         return numsEmpty;
     }
@@ -294,17 +297,16 @@ public class HeapPage implements Page {
      * Returns true if associated slot on this page is filled.
      */
     public boolean isSlotUsed(int i) throws IllegalArgumentException{
-        if (i < 0 || i > numSlots)
-            throw new IllegalArgumentException("Invalid slot number");
+
         int whichByte = i / 8;
         int whichBit = i % 8;
 
-        if (whichByte > header.length)
+        if (whichByte >= header.length || whichByte < 0)
             throw new IllegalArgumentException("Invalid whichByte");
-        byte[] byteArContainsI = new byte[]{header[whichByte]};
+        byte byteWithSlot = header[whichByte];
+        int bitMask = 1 << whichBit;
 
-        BigInteger bi = new BigInteger(byteArContainsI);
-        return bi.testBit(whichBit);
+        return (byteWithSlot & bitMask) > 0;
     }
 
     /**

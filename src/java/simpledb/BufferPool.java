@@ -29,7 +29,7 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     private int numPages;
-    private HashMap<PageId,Page> bufferMap;
+    private ConcurrentHashMap<PageId,Page> bufferMap;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -38,7 +38,7 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         this.numPages = numPages;
-        this.bufferMap = new HashMap<>();
+        this.bufferMap = new ConcurrentHashMap<>();
         // some code goes here
     }
     
@@ -73,24 +73,18 @@ public class BufferPool {
      */
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
-        if (bufferMap.containsKey(pid)){
-            return bufferMap.get(pid);
-        }else {
-            HashSet<Catalog.DbTable> dbTables = Database.getCatalog().getDbTables();
-            for (Catalog.DbTable dbTable: dbTables) {
-                if (dbTable.getTableId() == pid.getTableId()){
-                    DbFile file = dbTable.getDbFile();
-                    Page pageRead = file.readPage(pid);
-                    if (numPages <= bufferMap.size()){
-                        evictPage();
-                    }
-                    bufferMap.put(pid,pageRead);
-                    return pageRead;
-                }
+
+        Page p = bufferMap.get(pid);
+        if (p == null){
+            if (bufferMap.size() >= numPages){
+                throw new DbException("Buffer overflow");
+            } else {
+                p = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+                bufferMap.put(pid,p);
             }
         }
+        return p;
         // some code goes here
-        throw new DbException("page requested not in bufferpool or disk!");
     }
 
     /**

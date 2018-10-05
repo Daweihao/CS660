@@ -187,7 +187,7 @@ public class Catalog {
     
     /** Delete all tables from the catalog */
     public void clear() {
-        this.dbTables = new HashSet<>();
+        this.dbTables.clear();
         // some code goes here
     }
     

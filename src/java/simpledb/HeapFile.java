@@ -29,7 +29,7 @@ public class HeapFile implements DbFile {
         // some code goes here
         this.heapFile = f;
         this.td = td;
-        this.numPages = (int)Math.ceil(f.length()/BufferPool.getPageSize());
+        this.numPages = (int)(f.length()/BufferPool.getPageSize());
     }
 
     /**
