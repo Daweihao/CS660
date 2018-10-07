@@ -23,6 +23,7 @@ public class Catalog {
     }
 
     public Map<Integer,DbTable> dbTables;
+    //private HashMap<String,DbTable> nameToTable;
     public  class DbTable{
             public String getName() {
             return name;
@@ -73,6 +74,7 @@ public class Catalog {
      */
     public Catalog() {
         this.dbTables = new HashMap<>();
+        //this.nameToTable = new HashMap<>();
 
         // some code goes here
     }
@@ -89,16 +91,18 @@ public class Catalog {
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
     	Integer itd = file.getId();
-    	if (name.equals(null))
-    		throw new IllegalArgumentException();
     	if (dbTables.containsKey(itd)) {
     		dbTables.remove(itd);
     	} 
-    	
-    		for (DbTable t : dbTables.values()) {
-    			if(t.getName().equals(name)) {
-    				dbTables.remove(t.getTableId());
+    	Integer duplicateId = -1;
+    		for (Integer id : dbTables.keySet()) {
+    			if(dbTables.get(id).getName().equals(name)) {
+    			    duplicateId = id;
     			}
+    		}
+    		if (duplicateId != -1)
+    		{
+    		dbTables.remove(duplicateId);
     		}
     		DbTable dbTable = new DbTable(file,name,pkeyField);
     		dbTables.put(itd,dbTable);
