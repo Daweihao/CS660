@@ -2,8 +2,10 @@ package simpledb;
 
 import java.io.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -30,6 +32,7 @@ public class BufferPool {
 
     private int numPages;
     private ConcurrentHashMap<PageId,Page> bufferMap;
+    private ConcurrentHashMap<PageId,Integer> recentlyUsed;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -39,6 +42,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         this.numPages = numPages;
         this.bufferMap = new ConcurrentHashMap<>();
+        this.recentlyUsed = new ConcurrentHashMap<>();
         // some code goes here
     }
     
@@ -76,13 +80,27 @@ public class BufferPool {
 
         Page p = bufferMap.get(pid);
         if (p == null){
-            if (bufferMap.size() >= numPages){
-                throw new DbException("Buffer overflow");
-            } else {
+            List<Catalog.DbTable> tableList = Database.getCatalog().getDbTables();
+            for (Catalog.DbTable t: tableList
+                 ) {
+                DbFile dbFile = t.getDbFile();
+                p = dbFile.readPage(pid);
+                if (bufferMap.size() >= numPages){
+                    evictPage();
+                }
+                bufferMap.put(pid,p);
+                updateRecentlyUsed();
+                recentlyUsed.put(pid,0);
+                return p;
+            }
+
+        }
+            else {
                 p = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+                updateRecentlyUsed();
+                recentlyUsed.put(pid,0);
                 bufferMap.put(pid,p);
             }
-        }
         return p;
         // some code goes here
     }
@@ -178,6 +196,9 @@ public class BufferPool {
      */
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
+        for (PageId pid: bufferMap.keySet()){
+            flushPage(pid);
+        }
         // not necessary for lab1
 
     }
@@ -201,6 +222,11 @@ public class BufferPool {
      */
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
+        Page page = bufferMap.get(pid);
+        int tableid = ((HeapPageId)pid).getTableId();
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableid);
+        heapFile.writePage(page);
+        page.markDirty(true,null);
         // not necessary for lab1
     }
 
@@ -216,8 +242,40 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized  void evictPage() throws DbException {
+        Page evictPage;
+        int counter = -1;
+        PageId evictPageId = null;
+        for (PageId key: recentlyUsed.keySet()
+             ) {
+            int value = recentlyUsed.get(key);
+            if (value > counter){
+                evictPageId = key;
+                counter = value;
+            }
+        }
+
+        evictPage = bufferMap.get(evictPageId);
+        try {
+            flushPage(evictPageId);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        bufferMap.remove(evictPageId);
+        recentlyUsed.remove(evictPageId);
+
         // some code goes here
         // not necessary for lab1
     }
 
+    public void updateRecentlyUsed(){
+        if (!recentlyUsed.isEmpty()){
+            for (PageId pid: recentlyUsed.keySet()
+                 ) {
+                int value = recentlyUsed.get(pid);
+                value++;
+                recentlyUsed.put(pid,value);
+            }
+        }
+
+    }
 }

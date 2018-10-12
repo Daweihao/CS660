@@ -18,8 +18,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
-    public Map<Integer,DbTable> getDbTables() {
-        return getDbTables();
+    public List<DbTable> getDbTables() {
+        List<DbTable> tableList = new LinkedList<>();
+        Collection<DbTable> tables = dbTables.values();
+        tableList.addAll(tables);
+        return tableList;
     }
 
     public Map<Integer,DbTable> dbTables;
