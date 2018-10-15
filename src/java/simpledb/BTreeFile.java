@@ -2,7 +2,6 @@ package simpledb;
 
 import java.io.*;
 import java.util.*;
-import java.nio.channels.FileChannel;
 
 import simpledb.Predicate.Op;
 
@@ -195,7 +194,37 @@ public class BTreeFile implements DbFile {
 	private BTreeLeafPage findLeafPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePageId pid, Permissions perm,
 			Field f) 
 					throws DbException, TransactionAbortedException {
+
 		// some code goes here
+       switch (pid.pgcateg()){
+           case BTreePageId.LEAF:{
+               return (BTreeLeafPage) getPage(tid,dirtypages,pid,perm);
+           }
+           case BTreePageId.INTERNAL:{
+               BTreeInternalPage internalPage = (BTreeInternalPage) getPage(tid,dirtypages,pid,perm);
+               Iterator<BTreeEntry> internalIterator = internalPage.iterator();
+               if (internalIterator ==null || !internalIterator.hasNext()){
+                   throw new DbException("No such internal pages");
+               }
+               if (f == null){
+                   // return the leftmost childPage
+                   return findLeafPage(tid,dirtypages, internalIterator.next().getLeftChild(),perm,f);
+               }
+                BTreeEntry be;
+               do {
+                   be = internalIterator.next();
+                   if (be.getKey().compare(Op.GREATER_THAN_OR_EQ, f)) {
+                       return findLeafPage(tid, dirtypages, be.getLeftChild(), perm, f);
+                   }
+               }while (internalIterator.hasNext());
+
+
+               return findLeafPage(tid, dirtypages, be.getRightChild(), perm, f);
+           }
+           case BTreePageId.ROOT_PTR:{}
+           case BTreePageId.HEADER:{}
+           default: break;
+       }
         return null;
 	}
 	
@@ -212,7 +241,7 @@ public class BTreeFile implements DbFile {
 	 * 
 	 */
 	BTreeLeafPage findLeafPage(TransactionId tid, BTreePageId pid, Permissions perm,
-			Field f) 
+			Field f)
 					throws DbException, TransactionAbortedException {
 		return findLeafPage(tid, new HashMap<PageId, Page>(), pid, perm, f);
 	}
@@ -521,7 +550,7 @@ public class BTreeFile implements DbFile {
 	 * @throws IOException
 	 * @throws TransactionAbortedException
 	 */
-	private void handleMinOccupancyLeafPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreeLeafPage page, 
+	private void handleMinOccupancyLeafPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreeLeafPage page,
 			BTreeInternalPage parent, BTreeEntry leftEntry, BTreeEntry rightEntry) 
 			throws DbException, IOException, TransactionAbortedException {
 		BTreePageId leftSiblingId = null;

@@ -1,5 +1,6 @@
 package simpledb;
 
+import javax.xml.crypto.Data;
 import java.io.*;
 
 import java.util.ArrayList;
@@ -45,7 +46,7 @@ public class BufferPool {
         this.recentlyUsed = new ConcurrentHashMap<>();
         // some code goes here
     }
-    
+
     public static int getPageSize() {
       return pageSize;
     }
@@ -80,11 +81,7 @@ public class BufferPool {
 
         Page p = bufferMap.get(pid);
         if (p == null){
-            List<Catalog.DbTable> tableList = Database.getCatalog().getDbTables();
-            for (Catalog.DbTable t: tableList
-                 ) {
-                DbFile dbFile = t.getDbFile();
-                p = dbFile.readPage(pid);
+                p = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
                 if (bufferMap.size() >= numPages){
                     evictPage();
                 }
@@ -94,9 +91,8 @@ public class BufferPool {
                 return p;
             }
 
-        }
+
             else {
-                p = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
                 updateRecentlyUsed();
                 recentlyUsed.put(pid,0);
                 bufferMap.put(pid,p);
@@ -167,6 +163,10 @@ public class BufferPool {
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
+        ArrayList<Page> affectedPages;
+        DbFile dbFile = Database.getCatalog().getDatabaseFile(tableId);
+        HeapFile hpFile = (HeapFile)dbFile;
+
         // not necessary for lab1
     }
 
