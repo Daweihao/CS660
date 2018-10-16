@@ -3,10 +3,7 @@ package simpledb;
 import javax.xml.crypto.Data;
 import java.io.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -165,7 +162,13 @@ public class BufferPool {
         // some code goes here
         ArrayList<Page> affectedPages;
         DbFile dbFile = Database.getCatalog().getDatabaseFile(tableId);
-        HeapFile hpFile = (HeapFile)dbFile;
+        affectedPages = dbFile.insertTuple(tid,t);
+        Iterator<Page> it = affectedPages.iterator();
+        if (it.hasNext()){
+            Page p = it.next();
+            p.markDirty(true,tid);
+            bufferMap.put(p.getId(),p);
+        }
 
         // not necessary for lab1
     }
@@ -214,6 +217,7 @@ public class BufferPool {
     public synchronized void discardPage(PageId pid) {
         // some code goes here
         // not necessary for lab1
+        bufferMap.remove(pid);
     }
 
     /**
@@ -223,10 +227,12 @@ public class BufferPool {
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
         Page page = bufferMap.get(pid);
-        int tableid = ((HeapPageId)pid).getTableId();
-        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableid);
-        heapFile.writePage(page);
+        if (page != null || page.isDirty() != null){
+        int tableid = pid.getTableId();
+        Database.getCatalog().getDatabaseFile(tableid).writePage(page);
         page.markDirty(true,null);
+        }
+
         // not necessary for lab1
     }
 

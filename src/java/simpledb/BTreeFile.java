@@ -227,7 +227,7 @@ public class BTreeFile implements DbFile {
        }
         return null;
 	}
-	
+
 	/**
 	 * Convenience method to find a leaf page when there is no dirtypages HashMap.
 	 * Used by the BTreeFile iterator.
@@ -277,7 +277,37 @@ public class BTreeFile implements DbFile {
 		// the new entry.  getParentWithEmtpySlots() will be useful here.  Don't forget to update
 		// the sibling pointers of all the affected leaf pages.  Return the page into which a 
 		// tuple with the given key field should be inserted.
-        return null;
+        BTreeLeafPage newPage = (BTreeLeafPage) getEmptyPage(tid,dirtypages,BTreePageId.LEAF);
+        Iterator<Tuple> leafIterator = page.iterator();
+        if (leafIterator == null || !leafIterator.hasNext()){
+            throw new DbException("No page iterator");
+        }
+        int numTs = page.getNumTuples();
+        for (int i = 0; i < numTs/2 ; i++) {
+            Tuple t = leafIterator.next();
+            page.deleteTuple(t);
+            newPage.insertTuple(t);
+        }
+        // revise the leftSibling's right child
+        BTreePageId lId = page.getLeftSiblingId();
+        BTreePageId rId = page.getRightSiblingId();
+        if (lId!= null){
+            BTreeLeafPage leftPage = (BTreeLeafPage) getPage(tid,dirtypages,lId,Permissions.READ_ONLY);
+            leftPage.setRightSiblingId(newPage.getId());
+        }
+        newPage.setLeftSiblingId(lId);
+        newPage.setRightSiblingId(page.getId());
+        page.setLeftSiblingId(newPage.getId());
+
+        Field f = leafIterator.next().getField(keyField);
+        BTreeEntry be  = new BTreeEntry(f,newPage.getId(),page.getId());
+        BTreeInternalPage parent = getParentWithEmptySlots(tid,dirtypages,page.getParentId(),f);
+        parent.insertEntry(be);
+        updateParentPointers(tid,dirtypages,parent);
+        if (f.compare(Op.GREATER_THAN_OR_EQ,field)){
+            return newPage;
+        }
+        return page;
 		
 	}
 	
@@ -307,7 +337,31 @@ public class BTreeFile implements DbFile {
 			BTreeInternalPage page, Field field) 
 					throws DbException, IOException, TransactionAbortedException {
 		// some code goes here
-		return null;
+        Iterator<BTreeEntry> it = page.iterator();
+        BTreeInternalPage nPage = (BTreeInternalPage) getEmptyPage(tid,dirtypages,BTreePageId.INTERNAL);
+        if (it == null || !it.hasNext()){
+            throw new DbException("Invalid page iterator");
+        }
+        int pageNum = page.getNumEntries();
+        for (int i = 0; i < pageNum/2 ; i++) {
+            BTreeEntry be = it.next();
+            page.deleteKeyAndLeftChild(be);
+            nPage.insertEntry(be);
+        }
+        BTreeEntry pushUpEntry = it.next();
+        Field f = pushUpEntry.getKey();
+        page.deleteKeyAndLeftChild(pushUpEntry);
+        pushUpEntry = new BTreeEntry(f,nPage.getId(),page.getId());
+        //
+        updateParentPointers(tid,dirtypages,page);
+        updateParentPointers(tid,dirtypages,nPage);
+        BTreeInternalPage parent = getParentWithEmptySlots(tid,dirtypages,page.getParentId(),f);
+        parent.insertEntry(pushUpEntry);
+        updateParentPointers(tid,dirtypages,parent);
+        if (f.compare(Op.GREATER_THAN_OR_EQ,field)){
+            return nPage;
+        }
+		return page;
 	}
 	
 	/**
