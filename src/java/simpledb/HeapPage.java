@@ -314,6 +314,15 @@ public class HeapPage implements Page {
      */
     private void markSlotUsed(int i, boolean value) {
         // some code goes here
+        int whichByte = i / 8;
+        int whichBit = i % 8;
+
+        if (whichByte >= header.length || whichByte < 0)
+            throw new IllegalArgumentException("Invalid whichByte");
+        if (value){
+            header[whichByte] |= (1<<whichBit);
+
+        }
         // not necessary for lab1
     }
 

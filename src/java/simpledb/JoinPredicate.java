@@ -1,5 +1,6 @@
 package simpledb;
 
+import javax.swing.*;
 import java.io.Serializable;
 
 /**
@@ -12,6 +13,7 @@ public class JoinPredicate implements Serializable {
     private int field1;
     private int field2;
     private Predicate.Op op;
+
 
     /**
      * Constructor -- create a new predicate over two fields of two tuples.
