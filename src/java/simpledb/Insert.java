@@ -12,6 +12,8 @@ public class Insert extends Operator {
     private TransactionId t;
     private DbIterator child;
     private int tableId;
+    private Tuple retTup;
+    private boolean valid;
 
     /**
      * Constructor.
@@ -31,12 +33,16 @@ public class Insert extends Operator {
         this.t = t;
         this.child = child;
         this.tableId = tableId;
+        Type[] typeAr = {Type.INT_TYPE};
+        String[] fieldAr = {"Inserted_counts"};
+        this.retTup = new Tuple(new TupleDesc(typeAr,fieldAr));
+        this.valid = true;
         // some code goes here
     }
 
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return child.getTupleDesc();
+        return retTup.getTupleDesc();
     }
 
     public void open() throws DbException, TransactionAbortedException {
@@ -53,6 +59,7 @@ public class Insert extends Operator {
 
     public void rewind() throws DbException, TransactionAbortedException {
         child.rewind();
+        valid = true;
         // some code goes here
     }
 
@@ -71,9 +78,7 @@ public class Insert extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         int count = 0;
-        Type[] typeAr = {Type.INT_TYPE};
-        String[] fieldAr = {"Inserted_counts"};
-        Tuple retTup = new Tuple(new TupleDesc(typeAr,fieldAr));
+
         while (child.hasNext()){
             try {
                 Database.getBufferPool().insertTuple(t,tableId,child.next());
@@ -82,9 +87,15 @@ public class Insert extends Operator {
                 e.printStackTrace();
             }
         }
-        retTup.setField(0,new IntField(count));
+        if (valid) {
+            retTup.setField(0, new IntField(count));
+            valid = false;
+            return retTup;
+        }else {
+            return null;
+        }
         // some code goes here
-        return retTup;
+
     }
 
     @Override

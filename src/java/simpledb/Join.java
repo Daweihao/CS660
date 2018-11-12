@@ -17,7 +17,7 @@ public class Join extends Operator {
     /**
      * Constructor. Accepts to children to join and the predicate to join them
      * on
-     * 
+     *
      * @param p
      *            The predicate to use to join the children
      * @param child1
@@ -105,57 +105,69 @@ public class Join extends Operator {
      * <p>
      * For example, if one tuple is {1,2,3} and the other tuple is {1,5,6},
      * joined on equality of the first column, then this returns {1,2,3,1,5,6}.
-     * 
+     *
      * @return The next matching tuple.
      * @see JoinPredicate#filter
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
-//        Tuple left1 = null;
-//        Tuple right1 = null;
-//        OUT:
-//        for (;child1.hasNext();) {
-//            left = child1.next();
-//            for (;child2.hasNext();) {
-//                right = child2.next();
-//                if (this.left.getField(this.p.getField1()).compare(this.p.getOperator(), this.right.getField(this.p.getField2()))){
-//                    left1 = left;
-//                    right1 = right;
-//                    break OUT;
-//                }
-//            }
-//            child2.rewind();
-//        }
-        do {
-            if (!this.child2.hasNext()) {
-                if (!this.child1.hasNext()) {
-                    return null;
-                } else {
-                    this.left = child1.next();
-                    this.child2.rewind();
-                    this.right = child2.next();
-                }
-            } else {
-                if (this.left == null) { // Initial case.
-                    if (this.child1.hasNext()) {
-                        this.left = this.child1.next();
-                    } else {
-                        return null;
-                    }
-                }
-                this.right = child2.next();
+        Tuple left1 = null;
+        Tuple right1 = null;
+        while (child1.hasNext()|| left != null) {
+            if (left == null) {
+                left = child1.next();
             }
-        } while (!this.left.getField(this.p.getField1()).compare(this.p.getOperator(), this.right.getField(this.p.getField2())));
+            while (child2.hasNext()) {
+                right = child2.next();
+                if (this.left.getField(this.p.getField1()).compare(this.p.getOperator(), this.right.getField(this.p.getField2()))) {
+                    left1 = left;
+                    right1 = right;
+                    if (left1 != null && right1 != null) {
+                        TupleDesc td = getTupleDesc();
+                        Tuple mergedTuple = new Tuple(td);
+                        mergedTuple.fieldList.addAll(left.fieldList);
+                        mergedTuple.fieldList.addAll(right.fieldList);
 
-
-
-        if (left != null && right != null) {
-            TupleDesc td = getTupleDesc();
-            Tuple mergedTuple = new Tuple(td);
-            mergedTuple.fieldList.addAll(left.fieldList);
-            mergedTuple.fieldList.addAll(right.fieldList);
-            return mergedTuple;
+                        return mergedTuple;
+                    }
+//                    break OUT;
+                }
+            }
+            left = null;
+            child2.rewind();
         }
+
+
+//        do {
+//            if (!this.child2.hasNext()) {
+//                if (!this.child1.hasNext()) {
+//                    return null;
+//                } else {
+//                    this.left = child1.next();
+//                    this.child2.rewind();
+//                    this.right = child2.next();
+//                }
+//            } else {
+//                if (this.left == null) { // Initial case.
+//                    if (this.child1.hasNext()) {
+//                        this.left = this.child1.next();
+//                    } else {
+//                        return null;
+//                    }
+//                }
+//                this.right = child2.next();
+//            }
+//        } while (!this.left.getField(this.p.getField1()).compare(this.p.getOperator(), this.right.getField(this.p.getField2())));
+
+
+
+//        if (left != null && right != null) {
+//            TupleDesc td = getTupleDesc();
+//            Tuple mergedTuple = new Tuple(td);
+//            mergedTuple.fieldList.addAll(left.fieldList);
+//            mergedTuple.fieldList.addAll(right.fieldList);
+//            return mergedTuple;
+//        }
         return null;
     }
 
