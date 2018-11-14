@@ -138,6 +138,7 @@ public class BTreeRootPtrPage implements Page {
 			return null;
 	}
 
+
 	/** Return a view of this page before it was modified
         -- used by recovery */
 	public BTreeRootPtrPage getBeforeImage(){

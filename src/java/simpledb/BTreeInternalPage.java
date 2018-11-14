@@ -280,6 +280,7 @@ public class BTreeInternalPage extends BTreePage {
 				continue;
 			}
 
+
 			// non-empty slot
 			try {
 				keys[i].serialize(dos);
@@ -304,6 +305,7 @@ public class BTreeInternalPage extends BTreePage {
 				}
 				continue;
 			}
+
 
 			// non-empty slot
 			try {
@@ -578,6 +580,7 @@ public class BTreeInternalPage extends BTreePage {
 		return cnt;
 	}
 
+
 	/**
 	 * Returns true if associated slot on this page is filled.
 	 */
@@ -629,6 +632,7 @@ public class BTreeInternalPage extends BTreePage {
 		if (i <= 0 || i >= keys.length)
 			throw new NoSuchElementException();
 
+
 		try {
 			if(!isSlotUsed(i)) {
 				Debug.log(1, "BTreeInternalPage.getKey: slot %d in %d:%d is not used", i, pid.getTableId(), pid.pageNumber());
@@ -643,6 +647,7 @@ public class BTreeInternalPage extends BTreePage {
 		}
 	}
 
+	
 	/**
 	 * protected method used by the iterator to get the ith child page id out of this page
 	 * @param i - the index of the child page id
@@ -653,6 +658,7 @@ public class BTreeInternalPage extends BTreePage {
 
 		if (i < 0 || i >= children.length)
 			throw new NoSuchElementException();
+
 
 		try {
 			if(!isSlotUsed(i)) {
@@ -669,6 +675,7 @@ public class BTreeInternalPage extends BTreePage {
 	}
 }
 
+
 /**
  * Helper class that implements the Java Iterator for entries on a BTreeInternalPage.
  */
@@ -677,6 +684,7 @@ class BTreeInternalPageIterator implements Iterator<BTreeEntry> {
 	BTreePageId prevChildId = null;
 	BTreeEntry nextToReturn = null;
 	BTreeInternalPage p;
+
 
 	public BTreeInternalPageIterator(BTreeInternalPage p) {
 		this.p = p;
@@ -740,6 +748,7 @@ class BTreeInternalPageReverseIterator implements Iterator<BTreeEntry> {
 	RecordId recordId = null;
 	BTreeEntry nextToReturn = null;
 	BTreeInternalPage p;
+
 
 	public BTreeInternalPageReverseIterator(BTreeInternalPage p) {
 		this.p = p;

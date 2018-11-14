@@ -5,6 +5,7 @@ import java.util.*;
 
 import simpledb.Predicate.Op;
 
+
 /**
  * BTreeFileEncoder reads a comma delimited text file and converts it to
  * pages of binary data in the appropriate format for simpledb B+ tree
@@ -47,6 +48,7 @@ public class BTreeFileEncoder {
 		bw.close();
 		return convert(tempInput, hFile, bFile, keyField, numFields);
 	}
+
 
 	/**
 	 * Encode the file using the BTreeFile's Insert method.
@@ -104,6 +106,7 @@ public class BTreeFileEncoder {
 		}
 
 		return bf;
+
 
 	}
 
@@ -388,6 +391,7 @@ public class BTreeFileEncoder {
 		}
 	}
 
+
 	/**
 	 * Write out any remaining entries and update the parent pointers.
 	 * 
@@ -492,6 +496,7 @@ public class BTreeFileEncoder {
 		entries.get(level).add(e);
 	}
 
+
 	/**
 	 * Convert a set of tuples to a byte array in the format of a BTreeLeafPage
 	 * 
@@ -554,6 +559,7 @@ public class BTreeFileEncoder {
 		if (i % 8 > 0)
 			dos.writeByte(headerbyte);
 
+
 		Collections.sort(tuples, new TupleComparator(keyField));
 		for(int t = 0; t < recordcount; t++) {
 			TupleDesc td = tuples.get(t).getTupleDesc();
@@ -611,6 +617,7 @@ public class BTreeFileEncoder {
 		}
 	}
 
+
 	/**
 	 * Convert a set of entries to a byte array in the format of a BTreeInternalPage
 	 * 
@@ -666,6 +673,7 @@ public class BTreeFileEncoder {
 
 		if (i % 8 > 0)
 			dos.writeByte(headerbyte);
+
 
 		Collections.sort(entries, new EntryComparator());
 		for(int e = 0; e < entrycount; e++) {

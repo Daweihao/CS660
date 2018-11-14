@@ -18,68 +18,23 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
-    public List<DbTable> getDbTables() {
-        List<DbTable> tableList = new LinkedList<>();
-        Collection<DbTable> tables = dbTables.values();
-        tableList.addAll(tables);
-        return tableList;
-    }
-
-    public Map<Integer,DbTable> dbTables;
-    //private HashMap<String,DbTable> nameToTable;
-    public  class DbTable{
-            public String getName() {
-            return name;
-        }
-
-        public void setName(String name) {
-            this.name = name;
-        }
-
-        public DbTable(DbFile dbFile, String name, String pkeyField) {
-            this.dbFile = dbFile;
-            this.name = name;
-            this.pkeyField = pkeyField;
-            this.tableId = dbFile.getId();
-
-        }
-
-        public DbFile getDbFile() {
-            return dbFile;
-        }
-
-        public DbFile dbFile;
-        public String name;
-
-        public int getTableId() {
-            return tableId;
-        }
-
-        public int tableId;
-
-        public String getPkeyField() {
-            return pkeyField;
-        }
-
-        public void setPkeyField(String pkeyField) {
-            this.pkeyField = pkeyField;
-        }
-
-        public String pkeyField;
-
-
-
-    }
+    private final Map<Integer, DbFile> id2table;
+    private final Map<Integer, TupleDesc> id2tupledesc;
+    private final Map<String, Integer> name2id;
+    private final Map<Integer, String> id2name;
+    private final Map<Integer, String> pkey;
 
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
-        this.dbTables = new HashMap<>();
-        //this.nameToTable = new HashMap<>();
+        id2table = new ConcurrentHashMap<Integer, DbFile>();
+        id2tupledesc = new ConcurrentHashMap<Integer, TupleDesc>();
+        name2id = new ConcurrentHashMap<String,Integer>();
+        id2name = new ConcurrentHashMap<Integer,String>();
+        pkey = new ConcurrentHashMap<Integer,String>();
 
-        // some code goes here
     }
 
     /**
@@ -92,25 +47,22 @@ public class Catalog {
      * @param pkeyField the name of the primary key field
      */
     public void addTable(DbFile file, String name, String pkeyField) {
-        // some code goes here
-    	Integer itd = file.getId();
-    	if (dbTables.containsKey(itd)) {
-    		dbTables.remove(itd);
-    	} 
-    	Integer duplicateId = -1;
-    		for (Integer id : dbTables.keySet()) {
-    			if(dbTables.get(id).getName().equals(name)) {
-    			    duplicateId = id;
-    			}
-    		}
-    		if (duplicateId != -1)
-    		{
-    		dbTables.remove(duplicateId);
-    		}
-    		DbTable dbTable = new DbTable(file,name,pkeyField);
-    		dbTables.put(itd,dbTable);
-   
+		// It's not strictly necessary to remove existing tables by the same name;
+		// it means that you can no longer get at those tables by ID, but it saves
+		// some amount of memory.
+		if (name2id.containsKey(name)) {
+			id2table.remove( name2id.get(name) );
+			id2tupledesc.remove( name2id.get(name) );
+			name2id.remove(name);
+		}
+		
+        id2tupledesc.put(file.getId(), file.getTupleDesc());
+        id2table.put(file.getId(), file);
+        name2id.put(name, file.getId());
+        id2name.put(file.getId(), name);
 
+        pkey.put(file.getId(), pkeyField);
+        
     }
 
     public void addTable(DbFile file, String name) {
@@ -133,16 +85,13 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public int getTableId(String name) throws NoSuchElementException {
-        // some code goes here
-        if (name == null)
+        if (name==null)
             throw new NoSuchElementException();
-        for (DbTable t : dbTables.values()) {
-        	if(t.getName().equals(name)) {
-        		return t.getTableId();
-        	}
+        if (name2id.get(name) == null) {
+        	throw new NoSuchElementException();
         }
-       
-        throw new NoSuchElementException();
+
+        return name2id.get(name).intValue();
     }
 
     /**
@@ -152,11 +101,7 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
-        // some code goes here
-    	if (dbTables.containsKey(tableid)) {
-    		return dbTables.get(tableid).getDbFile().getTupleDesc();
-    	}
-        throw new NoSuchElementException();
+        return id2tupledesc.get(new Integer(tableid));
     }
 
     /**
@@ -166,42 +111,28 @@ public class Catalog {
      *     function passed to addTable
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
-
-        if(dbTables.containsKey(tableid)) {
-        	return dbTables.get(tableid).getDbFile();
-        }
-        throw new NoSuchElementException();
-        // some code goes here
+        return id2table.get(tableid);
     }
 
     public String getPrimaryKey(int tableid) {
-        if(dbTables.containsKey(tableid)) {
-        	dbTables.get(tableid).getPkeyField();
-        }
-        // some code goes here
-        throw new NoSuchElementException("No table has this table id");
+        return pkey.get(tableid);
     }
 
     public Iterator<Integer> tableIdIterator() {
-
-        // some code goes here
-        return dbTables.keySet().iterator();
+        return id2table.keySet().iterator();
     }
 
     public String getTableName(int id) {
-    
-    	if(dbTables.containsKey(id)) {
-    		return dbTables.get(id).getName();
-    	}
-        
-        // some code goes here
-        throw new NoSuchElementException("no table has this id");
+        return id2name.get(id);
     }
     
     /** Delete all tables from the catalog */
     public void clear() {
-        this.dbTables.clear();
-        // some code goes here
+        id2table.clear();
+        id2tupledesc.clear();
+        name2id.clear();
+        id2name.clear();
+        pkey.clear();
     }
     
     /**
@@ -220,8 +151,8 @@ public class Catalog {
                 //System.out.println("TABLE NAME: " + name);
                 String fields = line.substring(line.indexOf("(") + 1, line.indexOf(")")).trim();
                 String[] els = fields.split(",");
-                HashSet<String> names = new HashSet<String>();
-                HashSet<Type> types = new HashSet<Type>();
+                ArrayList<String> names = new ArrayList<String>();
+                ArrayList<Type> types = new ArrayList<Type>();
                 String primaryKey = "";
                 for (String e : els) {
                     String[] els2 = e.trim().split(" ");

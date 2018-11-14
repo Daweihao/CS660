@@ -8,16 +8,15 @@ import java.util.*;
 public class Join extends Operator {
 
     private static final long serialVersionUID = 1L;
-    private JoinPredicate p;
-    private DbIterator child1;
-    private DbIterator child2;
-    private Tuple left;
-    private Tuple right;
+    private JoinPredicate pred;
+    private DbIterator child1, child2;
+    private TupleDesc comboTD;
+    private Tuple t1 = null;
 
     /**
      * Constructor. Accepts to children to join and the predicate to join them
      * on
-     *
+     * 
      * @param p
      *            The predicate to use to join the children
      * @param child1
@@ -27,16 +26,15 @@ public class Join extends Operator {
      */
     public Join(JoinPredicate p, DbIterator child1, DbIterator child2) {
         // some code goes here
+        this.pred = p;
         this.child1 = child1;
         this.child2 = child2;
-        this.p = p;
-        this.left = null;
-        this.right = null;
+        comboTD = TupleDesc.merge(child1.getTupleDesc(), child2.getTupleDesc());
     }
 
     public JoinPredicate getJoinPredicate() {
         // some code goes here
-        return p;
+        return pred;
     }
 
     /**
@@ -46,7 +44,8 @@ public class Join extends Operator {
      * */
     public String getJoinField1Name() {
         // some code goes here
-        return child1.getTupleDesc().getFieldName(p.getField1());
+        return this.child1.getTupleDesc().getFieldName(this.pred.getField1());
+
     }
 
     /**
@@ -56,7 +55,7 @@ public class Join extends Operator {
      * */
     public String getJoinField2Name() {
         // some code goes here
-        return child1.getTupleDesc().getFieldName(p.getField2());
+        return this.child2.getTupleDesc().getFieldName(this.pred.getField2());
     }
 
     /**
@@ -65,30 +64,28 @@ public class Join extends Operator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return TupleDesc.merge(child1.getTupleDesc(),child2.getTupleDesc());
+        return comboTD;
     }
 
     public void open() throws DbException, NoSuchElementException,
             TransactionAbortedException {
         // some code goes here
-        super.open();
         child1.open();
         child2.open();
+        super.open();
     }
 
     public void close() {
-        super.close();
-        child1.close();
-        child2.close();
         // some code goes here
+        super.close();
+        child2.close();
+        child1.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
         child1.rewind();
         child2.rewind();
-        left = null;
-        right = null;
     }
 
     /**
@@ -105,79 +102,51 @@ public class Join extends Operator {
      * <p>
      * For example, if one tuple is {1,2,3} and the other tuple is {1,5,6},
      * joined on equality of the first column, then this returns {1,2,3,1,5,6}.
-     *
+     * 
      * @return The next matching tuple.
      * @see JoinPredicate#filter
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
-        // some code goes here
-        Tuple left1 = null;
-        Tuple right1 = null;
-        while (child1.hasNext()|| left != null) {
-            if (left == null) {
-                left = child1.next();
+        // loop around child1
+        while (t1 != null || child1.hasNext()) {
+            if (t1 == null) {
+                assert child1.hasNext();
+                t1 = child1.next();
             }
-            while (child2.hasNext()) {
-                right = child2.next();
-                if (this.left.getField(this.p.getField1()).compare(this.p.getOperator(), this.right.getField(this.p.getField2()))) {
-                    left1 = left;
-                    right1 = right;
-                    if (left1 != null && right1 != null) {
-                        TupleDesc td = getTupleDesc();
-                        Tuple mergedTuple = new Tuple(td);
-                        mergedTuple.fieldList.addAll(left.fieldList);
-                        mergedTuple.fieldList.addAll(right.fieldList);
 
-                        return mergedTuple;
-                    }
-//                    break OUT;
-                }
+            // loop around child2
+            while (child2.hasNext()) {
+                Tuple t2 = child2.next();
+
+                // if match, create a combined tuple and fill it with the values
+                // from both tuples
+                if (!pred.filter(t1, t2))
+                    continue;
+
+                int td1n = t1.getTupleDesc().numFields();
+                int td2n = t2.getTupleDesc().numFields();
+
+                // set fields in combined tuple
+                Tuple t = new Tuple(comboTD);
+                for (int i = 0; i < td1n; i++)
+                    t.setField(i, t1.getField(i));
+                for (int i = 0; i < td2n; i++)
+                    t.setField(td1n + i, t2.getField(i));
+                return t;
             }
-            left = null;
+
+            // child2 is done: advance child1
+            t1 = null;
             child2.rewind();
         }
-
-
-//        do {
-//            if (!this.child2.hasNext()) {
-//                if (!this.child1.hasNext()) {
-//                    return null;
-//                } else {
-//                    this.left = child1.next();
-//                    this.child2.rewind();
-//                    this.right = child2.next();
-//                }
-//            } else {
-//                if (this.left == null) { // Initial case.
-//                    if (this.child1.hasNext()) {
-//                        this.left = this.child1.next();
-//                    } else {
-//                        return null;
-//                    }
-//                }
-//                this.right = child2.next();
-//            }
-//        } while (!this.left.getField(this.p.getField1()).compare(this.p.getOperator(), this.right.getField(this.p.getField2())));
-
-
-
-//        if (left != null && right != null) {
-//            TupleDesc td = getTupleDesc();
-//            Tuple mergedTuple = new Tuple(td);
-//            mergedTuple.fieldList.addAll(left.fieldList);
-//            mergedTuple.fieldList.addAll(right.fieldList);
-//            return mergedTuple;
-//        }
         return null;
     }
 
     @Override
     public DbIterator[] getChildren() {
         // some code goes here
-        DbIterator[] children = new DbIterator[2];
-        children[0] = child1;
-        children[2] = child2;
-        return children;
+        return new DbIterator[] { this.child1, this.child2 };
+
     }
 
     @Override

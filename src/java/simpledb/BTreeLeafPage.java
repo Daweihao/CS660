@@ -40,6 +40,7 @@ public class BTreeLeafPage extends BTreePage {
 		}
 	}
 
+
 	/**
 	 * Create a BTreeLeafPage from a set of bytes of data read from disk.
 	 * The format of a BTreeLeafPage is a set of header bytes indicating
@@ -153,6 +154,7 @@ public class BTreeLeafPage extends BTreePage {
 		}
 	}
 
+
 	/**
 	 * Read tuples from the source file.
 	 */
@@ -248,6 +250,7 @@ public class BTreeLeafPage extends BTreePage {
 				}
 				continue;
 			}
+
 
 			// non-empty slot
 			for (int j=0; j<td.numFields(); j++) {
@@ -452,6 +455,7 @@ public class BTreeLeafPage extends BTreePage {
 		return cnt;
 	}
 
+
 	/**
 	 * Returns true if associated slot on this page is filled.
 	 */
@@ -502,6 +506,7 @@ public class BTreeLeafPage extends BTreePage {
 		if (i >= tuples.length)
 			throw new NoSuchElementException();
 
+
 		try {
 			if(!isSlotUsed(i)) {
 				Debug.log(1, "BTreeLeafPage.getTuple: slot %d in %d:%d is not used", i, pid.getTableId(), pid.pageNumber());
@@ -516,6 +521,7 @@ public class BTreeLeafPage extends BTreePage {
 		}
 	}
 }
+
 
 /**
  * Helper class that implements the Java Iterator for tuples on a BTreeLeafPage.

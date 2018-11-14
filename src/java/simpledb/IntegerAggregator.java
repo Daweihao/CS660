@@ -1,4 +1,5 @@
 package simpledb;
+
 import java.util.*;
 /**
  * Knows how to compute some aggregate over a set of IntFields.
@@ -6,10 +7,16 @@ import java.util.*;
 public class IntegerAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
+    private Op what;
+    private int gbfield;
+    private Type gbfieldtype;
+    private int afield;
+    // a map of groupVal -> AggregateFields
+    private HashMap<String, AggregateFields> groups;
 
     /**
      * Aggregate constructor
-     *
+     * 
      * @param gbfield
      *            the 0-based index of the group-by field in the tuple, or
      *            NO_GROUPING if there is no grouping
@@ -21,138 +28,125 @@ public class IntegerAggregator implements Aggregator {
      * @param what
      *            the aggregation operator
      */
-    private int gbfield;
-    private Type gbfieldtype;
-    private int afield;
-    private Op what;
-    private HashMap<String, ArrayList<Integer>> integerHashmap;
+
     public IntegerAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
-        this.gbfield = gbfield;
-        this.gbfieldtype = gbfieldtype;
-        this.afield = afield;
         this.what = what;
-        integerHashmap = new HashMap<>();
+        this.gbfield = gbfield;
+        this.afield = afield;
+        this.gbfieldtype = gbfieldtype;
+        this.groups = new HashMap<String, AggregateFields>();
     }
 
     /**
      * Merge a new tuple into the aggregate, grouping as indicated in the
      * constructor
-     *
+     * 
      * @param tup
      *            the Tuple containing an aggregate field and a group-by field
      */
     public void mergeTupleIntoGroup(Tuple tup) {
-        // some code goes here
-        String key = "NoGrouping";
-        if(gbfield != Aggregator.NO_GROUPING && gbfieldtype == Type.INT_TYPE){
-            key = Integer.toString(((IntField)tup.getField(gbfield)).getValue());
-        } else if(gbfield != Aggregator.NO_GROUPING){
-            key = ((StringField)tup.getField(gbfield)).getValue();
+        String groupVal = "";
+        if (gbfield != NO_GROUPING) {
+            groupVal = tup.getField(gbfield).toString();
         }
-        Integer temp = ((IntField)tup.getField(afield)).getValue();
-        if(!integerHashmap.containsKey(key))
-            integerHashmap.put(key, new ArrayList<>());
-        integerHashmap.get(key).add(temp);
+        AggregateFields agg = groups.get(groupVal);
+        if (agg == null)
+            agg = new AggregateFields(groupVal);
+
+        int x = ((IntField) tup.getField(afield)).getValue();
+
+        agg.count++;
+        agg.sum += x;
+        agg.min = (x < agg.min ? x : agg.min);
+        agg.max = (x > agg.max ? x : agg.max);
+        if (what==Op.SC_AVG)
+            agg.sumCount+=((IntField) tup.getField(afield+1)).getValue();
+
+        groups.put(groupVal, agg);
     }
 
     /**
      * Create a DbIterator over group aggregate results.
-     *
+     * 
      * @return a DbIterator whose tuples are the pair (groupVal, aggregateVal)
      *         if using group, or a single (aggregateVal) if no grouping. The
      *         aggregateVal is determined by the type of aggregate specified in
      *         the constructor.
      */
     public DbIterator iterator() {
-        // some code goes here
-        return new DbIterator(){
-            private Iterator iter = null;
-            public int calculation(ArrayList<Integer> list) throws NoSuchElementException{
-                int result = 0;
-                switch(what){
-                    case MAX:
-                        return Collections.max(list);
-                    case MIN:
-                        return Collections.min(list);
-                    case AVG:
-                        for(int i : list)
-                            result = result + i;
-                        return result / list.size();
-                    case SUM:
-                        for(int i : list)
-                            result = result + i;
-                        return result;
-                    case COUNT:
-                        return list.size();
-                    default:
-                        throw new NoSuchElementException("");
-                }
-            }
-            @Override
-            public void open() throws DbException, TransactionAbortedException {
-                // TODO Auto-generated method stub
-                iter = integerHashmap.entrySet().iterator();
-            }
+        LinkedList<Tuple> result = new LinkedList<Tuple>();
+        int aggField = 1;
+        TupleDesc td;
 
-            @Override
-            public boolean hasNext() throws DbException, TransactionAbortedException {
-                // TODO Auto-generated method stub
-                if(iter == null)
-                    throw new DbException("");
-                return iter.hasNext();
+        
+        if (gbfield == NO_GROUPING) {
+            if (what==Op.SUM_COUNT)
+        	td = new TupleDesc(new Type[]{Type.INT_TYPE, Type.INT_TYPE});
+            else
+        	td = new TupleDesc(new Type[] { Type.INT_TYPE });
+            aggField = 0;
+        } else {
+            if (what==Op.SUM_COUNT)
+        	td = new TupleDesc(new Type[]{gbfieldtype,Type.INT_TYPE, Type.INT_TYPE});
+            else
+        	td = new TupleDesc(new Type[] { gbfieldtype, Type.INT_TYPE });
+        }
+
+        // iterate over groups and create summary tuples
+        for (String groupVal : groups.keySet()) {
+            AggregateFields agg = groups.get(groupVal);
+            Tuple tup = new Tuple(td);
+
+            if (gbfield != NO_GROUPING) {
+                if (gbfieldtype == Type.INT_TYPE)
+                    tup.setField(0, new IntField(new Integer(groupVal)));
+                else
+                    tup.setField(0, new StringField(groupVal, Type.STRING_LEN));
             }
-
-            @Override
-            public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
-                // TODO Auto-generated method stub
-                if(iter == null)
-                    throw new DbException("");
-                if(!iter.hasNext())
-                    throw new NoSuchElementException("");
-
-                TupleDesc td = getTupleDesc();
-                Tuple tuple = new Tuple(td);
-                HashMap.Entry temp = (HashMap.Entry) iter.next();
-                ArrayList<Integer> list = (ArrayList<Integer>) temp.getValue();
-                String key = (String) temp.getKey();
-                IntField value = new IntField(calculation(list));
-                if(gbfield == Aggregator.NO_GROUPING){
-                    tuple.setField(0, value);
-                }else if(gbfieldtype == Type.INT_TYPE){
-                    IntField gbfieldvalue = new IntField(Integer.parseInt(key));
-                    tuple.setField(0, gbfieldvalue);
-                    tuple.setField(1, value);
-                }else { // stringfield
-                    StringField gbfieldvalueString = new StringField(key, key.length());
-                    tuple.setField(0, gbfieldvalueString);
-                    tuple.setField(1, value);
-                }
-                return tuple;
+            switch (what) {
+            case MIN:
+                tup.setField(aggField, new IntField(agg.min));
+                break;
+            case MAX:
+                tup.setField(aggField, new IntField(agg.max));
+                break;
+            case SUM:
+                tup.setField(aggField, new IntField(agg.sum));
+                break;
+            case COUNT:
+                tup.setField(aggField, new IntField(agg.count));
+                break;
+            case AVG:
+                tup.setField(aggField, new IntField(agg.sum / agg.count));
+                break;
+            case SUM_COUNT:
+        	tup.setField(aggField, new IntField(agg.sum));
+        	tup.setField(aggField+1, new IntField(agg.count));
+        	break;
+            case SC_AVG:
+        	tup.setField(aggField, new IntField(agg.sum / agg.sumCount));
+        	break;
             }
 
-            @Override
-            public void rewind() throws DbException, TransactionAbortedException {
-                // TODO Auto-generated method stub
-                close();
-                open();
-            }
+            result.add(tup);
+        }
 
-            @Override
-            public TupleDesc getTupleDesc() {
-                // TODO Auto-generated method stub
-                if(gbfield == Aggregator.NO_GROUPING)
-                    return new TupleDesc(new Type[]{Type.INT_TYPE});
-                return new TupleDesc(new Type[]{gbfieldtype, Type.INT_TYPE});
-            }
-
-            @Override
-            public void close() {
-                // TODO Auto-generated method stub
-                iter = null;
-            }
-
-        };
+        DbIterator retVal = null;
+        retVal = new TupleIterator(td, Collections.unmodifiableList(result));
+        return retVal;
+       // UnsupportedOperationException("please implement me for lab3");
     }
 
+    private class AggregateFields {
+        public String groupVal;
+        public int min, max, sum, count, sumCount;
+
+        public AggregateFields(String groupVal) {
+            this.groupVal = groupVal;
+            min = Integer.MAX_VALUE;
+            max = Integer.MIN_VALUE;
+            sum = count = sumCount = 0;
+        }
+    }
 }

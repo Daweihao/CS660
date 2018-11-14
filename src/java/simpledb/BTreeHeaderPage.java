@@ -23,6 +23,7 @@ public class BTreeHeaderPage implements Page {
 	private int nextPage; // next header page or 0
 	private int prevPage; // previous header page or 0
 
+
 	byte[] oldData;
 	private final Byte oldDataLock=new Byte((byte)0);
 
@@ -58,6 +59,7 @@ public class BTreeHeaderPage implements Page {
 		header = new byte[getHeaderSize()];
 		for (int i=0; i<header.length; i++)
 			header[i] = dis.readByte();
+
 
 		dis.close();
 

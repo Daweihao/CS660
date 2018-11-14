@@ -1,8 +1,6 @@
 package simpledb;
 
-import javax.xml.crypto.Data;
 import java.io.IOException;
-import java.util.NoSuchElementException;
 
 /**
  * The delete operator. Delete reads tuples from its child operator and removes
@@ -11,16 +9,15 @@ import java.util.NoSuchElementException;
 public class Delete extends Operator {
 
     private static final long serialVersionUID = 1L;
-    private TransactionId t;
-    private DbIterator child;
-    private Tuple reTuple;
-    private boolean valid;
-    private int count;
 
+    private DbIterator child;
+    private TupleDesc returnTD;
+    private TransactionId tid;
+    private boolean processed=false;
     /**
      * Constructor specifying the transaction that this delete belongs to as
      * well as the child to read from.
-     *
+     * 
      * @param t
      *            The transaction this delete runs in
      * @param child
@@ -28,80 +25,75 @@ public class Delete extends Operator {
      */
     public Delete(TransactionId t, DbIterator child) {
         this.child = child;
-        this.t = t;
-        this.count = 0;
-        Type[] typeAr = {Type.INT_TYPE};
-        String[] fieldAr = {"Deleted_counts"};
-        this.reTuple = new Tuple(new TupleDesc(typeAr,fieldAr));
-        // some code goes here
+        this.tid = t;
+        
+        // we return a 1-field tuple
+        Type[] typeAr = new Type[1];
+        typeAr[0] = Type.INT_TYPE;
+        this.returnTD = new TupleDesc(typeAr);
     }
 
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return reTuple.getTupleDesc();
+        return returnTD;
     }
 
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
-        super.open();
         child.open();
-        count = 0;
-        valid = true;
+        super.open();
     }
 
     public void close() {
         // some code goes here
         super.close();
         child.close();
-        valid = true;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
-        child.rewind();
-        valid = true;
-        count = 0;
+        child.close();
+        child.open();
     }
 
     /**
      * Deletes tuples as they are read from the child operator. Deletes are
      * processed via the buffer pool (which can be accessed via the
      * Database.getBufferPool() method.
-     *
+     * 
      * @return A 1-field tuple containing the number of deleted records.
      * @see Database#getBufferPool
      * @see BufferPool#deleteTuple
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
-
-        if (!valid || child == null){
+        if (processed)
             return null;
-        }
-        while (child.hasNext()){
+        
+        int count = 0;
+        while (child.hasNext()) {
+            Tuple t = child.next();
             try {
-                Database.getBufferPool().deleteTuple(t,child.next());
-                count ++;
+            	Database.getBufferPool().deleteTuple(tid, t);
             } catch (IOException e) {
-                e.printStackTrace();
-            } catch (NoSuchElementException e){
-                e.printStackTrace();
+                throw new RuntimeException(e);
             }
-
+            count++;
         }
-            reTuple.setField(0,new IntField(count));
-            valid = false;
-            return reTuple;
 
-
+        // finished scanning
+        // generate a new "delete count" tuple
+        Tuple tup = new Tuple(returnTD);
+        tup.setField(0, new IntField(count));
+        processed=true;
+        return tup;
     }
 
     @Override
     public DbIterator[] getChildren() {
         // some code goes here
-        DbIterator[] children = new DbIterator[1];
-        children[0] = child;
-        return children;
+        return new DbIterator[] { this.child };
+        //return null;
     }
 
     @Override

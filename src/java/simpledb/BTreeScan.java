@@ -99,6 +99,7 @@ public class BTreeScan implements DbIterator {
 		this(tid, tableid, Database.getCatalog().getTableName(tableid), ipred);
 	}
 
+
 	public void open() throws DbException, TransactionAbortedException {
 		if (isOpen)
 			throw new DbException("double open on one DbIterator.");

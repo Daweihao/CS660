@@ -2,6 +2,7 @@ package simpledb;
 
 import java.io.Serializable;
 
+
 /**
  * Each instance of BTreeEntry stores one key and two child page ids. It is used
  * by BTreeInternalPage as an abstraction to iterate through the entries stored inside. 
@@ -135,3 +136,4 @@ public class BTreeEntry implements Serializable {
 	
 }
 
+	
