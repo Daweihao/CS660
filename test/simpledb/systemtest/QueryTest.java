@@ -34,7 +34,7 @@ public class QueryTest {
         return Utility.openHeapFile(columns, colPrefix, temp);
 	}
 	
-	@Test(timeout=20000) public void queryTest() throws IOException, DbException, TransactionAbortedException {
+	@Test(timeout=90000) public void queryTest() throws IOException, DbException, TransactionAbortedException {
 		// This test is intended to approximate the join described in the
 		// "Query Planning" section of 2009 Quiz 1,
 		// though with some minor variation due to limitations in simpledb

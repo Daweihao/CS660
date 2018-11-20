@@ -3,6 +3,11 @@ package simpledb;
 /** A class to represent a fixed-width histogram over a single integer-based field.
  */
 public class IntHistogram {
+    private final int bins[];
+    private final int min;
+    private final int max;
+    private volatile int ntups;
+    private volatile double avgSelectivity;
 
     /**
      * Create a new IntHistogram.
@@ -22,6 +27,10 @@ public class IntHistogram {
      */
     public IntHistogram(int buckets, int min, int max) {
     	// some code goes here
+    	bins = new int[buckets];
+        this.min = min;
+        this.max = max;
+        this.avgSelectivity=0.0;
     }
 
     /**
@@ -29,7 +38,18 @@ public class IntHistogram {
      * @param v Value to add to the histogram
      */
     public void addValue(int v) {
-    	// some code goes here
+        int nowNTups = ntups;//read volatile == synchronized enter, only for data visibility, no mutex guaranteed
+        int buckSteps = (int)((max-min)/bins.length);
+        if (buckSteps == 0)
+            buckSteps++;
+
+        int buck = (v - min)/buckSteps;
+        if (buck >= bins.length) buck = bins.length-1;
+        int old=bins[buck];
+        bins[buck]++;
+        
+        this.avgSelectivity+=2*old+1;
+        ntups=nowNTups+1;//write volatile == synchronized leave
     }
 
     /**
@@ -44,8 +64,101 @@ public class IntHistogram {
      */
     public double estimateSelectivity(Predicate.Op op, int v) {
 
-    	// some code goes here
-        return -1.0;
+        double vf = v;
+
+        // special cases to deal with outliers
+        if (op == Predicate.Op.GREATER_THAN_OR_EQ) {
+            if (v<=min) return 1;
+            if (v>max) return 0;
+        }
+        if (op == Predicate.Op.GREATER_THAN) {
+            if (v < min) return 1;
+            if (v >= max) return 0;
+            if (vf < max) vf = vf+.01; //return slightly less than full bucket
+        }
+        if (op == Predicate.Op.LESS_THAN) {
+            if (v <= min) return 0;
+            if (v > max) return 1;
+            if (vf > min) vf = vf-.01; //return slightly less than full bucket
+        }
+        if (op == Predicate.Op.LESS_THAN_OR_EQ) {
+            if (v < min) return 0;
+            if (v >= max) return 1;
+
+            if (vf < max) vf = vf+.99; //computations below return data exclusive of v, so be sure to include v's bin
+        }
+        if (op == Predicate.Op.EQUALS || op == Predicate.Op.LIKE) {
+            if (v < min || v > max)
+                return 0;
+        }
+        if (op == Predicate.Op.NOT_EQUALS) {
+            if (v < min || v > max)
+                return 1;
+        }
+
+
+    	int buckSteps = (int)((max-min)/bins.length);
+        if (buckSteps == 0)
+            buckSteps++;
+        
+        if (vf < min) vf = min - buckSteps;
+        if (vf > max) vf = max + buckSteps;
+        int buck = (int)((vf-min) / buckSteps);
+        if (buck < 0) buck = 0;
+        if (buck >= bins.length) buck = bins.length -1;
+        double buckMin = (buck * buckSteps) + min;
+        double buckMax = ((buck+1) * buckSteps) + min;
+        
+        int nowNTups = ntups;//read volatile == synchronized enter
+        
+        switch (op) {
+        case NOT_EQUALS: case EQUALS: case LIKE:
+            double frac = ((double)(bins[buck])/(double)ntups)/(double)buckSteps;
+            if (frac > 0 && frac < 1.0/(double)ntups)
+                frac = 1.0 / (double)ntups; //if there is some density in bin, then selectivity is at least 1/nups
+            if (op == Predicate.Op.EQUALS || op == Predicate.Op.LIKE)
+                return frac;
+            else
+                return 1-frac;
+        case GREATER_THAN_OR_EQ:
+        case GREATER_THAN:
+           //estimate fraction of this bucket
+            double buckFrac = (double)(buckMax - (vf)) / (double)(buckMax - buckMin);
+//            System.out.println("OP IS " + op + ", MAX = " + buckMax + " MIN = " + buckMin + " v = " + vf + " max = " +max + " min = " + min + " f =" + buckFrac + " buck = " + buck );
+
+            if (buckFrac > 1) buckFrac = 1.0;
+            if (buckFrac < 0) buckFrac = 0;
+
+            //compute selectivity in this bucket
+            double buckSel =  ((double)bins[buck]/(double)ntups) * buckFrac;
+            for (int i = buck+1; i < bins.length; i++) {
+                buckSel +=  ((double)bins[i]/ntups);
+
+            }
+//            System.out.println("SELECTIVITY IS " + buckSel);
+
+            return buckSel;
+
+        case LESS_THAN:
+        case LESS_THAN_OR_EQ:
+            
+            buckFrac = 1.0 - ((double)(buckMax - vf) / (double)(buckMax - buckMin));
+//            System.out.println("OP IS " + op + ", MAX = " + buckMax + " MIN = " + buckMin + " v = " + vf + " max = " +max + " min = " + min + " f =" + buckFrac + " buck = " + buck);
+            if (buckFrac < 0) buckFrac = 0;
+            if (buckFrac > 1) buckFrac = 1.0;
+
+            //compute selectivity in this bucket
+            buckSel =  ((double)bins[buck]/ntups) * buckFrac;
+            for (int i = buck-1; i >= 0; i--) {
+                buckSel +=  ((double)bins[i]/ntups);
+            }
+//            System.out.println("SELECTIVITY IS " + buckSel);
+
+            return buckSel;
+
+        }
+        ntups=nowNTups;//write volatile
+        return 1.0;
     }
     
     /**
@@ -59,14 +172,25 @@ public class IntHistogram {
     public double avgSelectivity()
     {
         // some code goes here
-        return 1.0;
+        return this.avgSelectivity/this.ntups/this.ntups;
+        //return 1.0;
     }
     
     /**
      * @return A string describing this histogram, for debugging purposes
      */
     public String toString() {
-        // some code goes here
-        return null;
+        int nowNTups = ntups;//read volatile == synchronized enter
+        int buckSteps = (int)((max-min)/bins.length);
+        if (buckSteps == 0)
+            buckSteps++;
+
+        int start = min;
+        String s = "";
+        for (int i = 0; i < bins.length; i++) {
+            s += "BIN " + i + " START " + start + " END " + (start + buckSteps) + " HEIGHT " + bins[i] + "\n";
+            start += buckSteps;
+        }
+        return s;
     }
 }

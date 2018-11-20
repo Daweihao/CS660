@@ -111,7 +111,7 @@ public class JoinOptimizer {
             // HINT: You may need to use the variable "j" if you implemented
             // a join algorithm that's more complicated than a basic
             // nested-loops join.
-            return -1.0;
+            return (double) cost1 + card1 * cost2 + card1 * card2;
         }
     }
 
@@ -156,6 +156,22 @@ public class JoinOptimizer {
             boolean t2pkey, Map<String, TableStats> stats,
             Map<String, Integer> tableAliasToId) {
         int card = 1;
+        if (joinOp == Predicate.Op.EQUALS || joinOp == Predicate.Op.NOT_EQUALS){
+            if (t1pkey && t2pkey){
+                card = card1 > card2 ? card2 : card1;
+            }
+            if (!t1pkey && t2pkey){
+                card = card1;
+            }
+            if (t1pkey && !t2pkey){
+                card = card2;
+            }
+            if (!t1pkey && !t2pkey){
+                card = card1 > card2? card1 : card2;
+            }
+        } else {
+            card = (int) (card1 * card2 * 0.3);
+        }
         // some code goes here
         return card <= 0 ? 1 : card;
     }
@@ -220,8 +236,63 @@ public class JoinOptimizer {
         //Not necessary for labs 1--3
 
         // some code goes here
-        //Replace the following
-        return joins;
+        PlanCache pc = new PlanCache();
+        for (int i = 1; i <= joins.size() ; i++) {
+            for (Set<LogicalJoinNode> es : enumerateSubsets(joins,i)){
+                Vector<LogicalJoinNode> bestPlan = null;
+                double tempBestSoFar = Double.MAX_VALUE;
+                int tempCard = 0;
+                for (LogicalJoinNode joinToRemove : es){
+                    CostCard cc = computeCostAndCardOfSubplan(stats,filterSelectivities,joinToRemove,es,tempBestSoFar,pc);
+                    if (cc != null){
+                        tempBestSoFar = cc.cost;
+                        tempCard = cc.card;
+                        bestPlan = cc.plan;
+                    }
+                }
+                pc.addPlan(es,tempBestSoFar,tempCard,bestPlan);
+            }
+
+        }
+        Set<LogicalJoinNode> tempSet = new HashSet<>();
+        for(Iterator<LogicalJoinNode> it = joins.iterator();it.hasNext();){
+            tempSet.add(it.next());
+        }
+        return pc.getOrder(tempSet);
+//        Replace the following
+//        PlanCache planCache = new PlanCache();
+//        Vector<LogicalJoinNode> nodeVector = new Vector<>();
+//
+//        for (int i = 1; i <= joins.size(); i++) {
+//            Set<Set<LogicalJoinNode>> sets = this.enumerateSubsets(this.joins, i);
+//            Iterator<Set<LogicalJoinNode>> setIterator = sets.iterator();
+//
+//            while (setIterator.hasNext())
+//            {
+//                Set<LogicalJoinNode> s = setIterator.next();
+//                planCache.addPlan(s, Double.MAX_VALUE, 0, null);
+//
+//                Iterator<LogicalJoinNode> nodeIterator = s.iterator();
+//                while (nodeIterator.hasNext())
+//                {
+//                    LogicalJoinNode toRemove = nodeIterator.next();
+//                    double curCost = planCache.getCost(s);
+//                    Set<LogicalJoinNode> joinSet = new HashSet<>(s);
+//                    joinSet.remove(toRemove);
+//
+//                    CostCard costCard = this.computeCostAndCardOfSubplan(
+//                            stats, filterSelectivities, toRemove, joinSet, curCost, planCache);
+//                    if (costCard != null && costCard.cost < curCost)
+//                    {
+//                        planCache.addPlan(s, costCard.cost, costCard.card, costCard.plan);
+//                        nodeVector = costCard.plan;
+//                    }
+//                }
+//            }
+//        }
+//
+//        return nodeVector;
+
     }
 
     // ===================== Private Methods =================================
