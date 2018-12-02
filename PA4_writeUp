@@ -1,0 +1,7 @@
+1. Design Decision:  I have implemented the estimateCost and estimateJoinCardnality to prove functions for join estimation. Then I implemented the joinOrder method which trys different combination of join and finally reachs a best plan. 
+
+2. This time, I didn't add any new function in each class.
+
+3. Missing part: None
+
+4. 3-5hours, finding some metrics mistakes is pretty hard. So making sure everyting is correct shown in the code.
