@@ -68,7 +68,22 @@ public class JoinOptimizer {
 
         JoinPredicate p = new JoinPredicate(t1id, lj.p, t2id);
 
-        j = new Join(p,plan1,plan2);
+
+        if (lj.p == Predicate.Op.EQUALS) {
+
+            try {
+                // dynamically load HashEquiJoin -- if it doesn't exist, just
+                // fall back on regular join
+                Class<?> c = Class.forName("simpledb.HashEquiJoin");
+                java.lang.reflect.Constructor<?> ct = c.getConstructors()[0];
+                j = (DbIterator) ct
+                        .newInstance(new Object[] { p, plan1, plan2 });
+            } catch (Exception e) {
+                j = new Join(p, plan1, plan2);
+            }
+        } else {
+            j = new Join(p, plan1, plan2);
+        }
 
         return j;
 
@@ -104,14 +119,19 @@ public class JoinOptimizer {
             double cost1, double cost2) {
         if (j instanceof LogicalSubplanJoinNode) {
             // A LogicalSubplanJoinNode represents a subquery.
-            // You do not need to implement proper support for these for Lab 5.
+            // You do not need to implement proper support for these for Lab 4.
             return card1 + cost1 + cost2;
         } else {
-            // Insert your code here.
-            // HINT: You may need to use the variable "j" if you implemented
-            // a join algorithm that's more complicated than a basic
-            // nested-loops join.
-            return (double) cost1 + card1 * cost2 + card1 * card2;
+            if (j.p == Predicate.Op.EQUALS) { // hash join case
+                return (double) card1
+                        + (double) card2
+                        + cost1
+                        + (cost2 * Math.max((double) card1
+                                / (double) HashEquiJoin.MAP_SIZE, 1));
+            } else
+                // nested loops case
+                return (double) card1 * card2 + (double) cost1
+                        + (double) (card1 * cost2);
         }
     }
 
@@ -138,7 +158,7 @@ public class JoinOptimizer {
             boolean t1pkey, boolean t2pkey, Map<String, TableStats> stats) {
         if (j instanceof LogicalSubplanJoinNode) {
             // A LogicalSubplanJoinNode represents a subquery.
-            // You do not need to implement proper support for these for Lab 5.
+            // You do not need to implement proper support for these for Lab 4.
             return card1;
         } else {
             return estimateTableJoinCardinality(j.p, j.t1Alias, j.t2Alias,
@@ -156,23 +176,48 @@ public class JoinOptimizer {
             boolean t2pkey, Map<String, TableStats> stats,
             Map<String, Integer> tableAliasToId) {
         int card = 1;
-        if (joinOp == Predicate.Op.EQUALS || joinOp == Predicate.Op.NOT_EQUALS){
-            if (t1pkey && t2pkey){
-                card = card1 > card2 ? card2 : card1;
-            }
-            if (!t1pkey && t2pkey){
-                card = card1;
-            }
-            if (t1pkey && !t2pkey){
-                card = card2;
-            }
-            if (!t1pkey && !t2pkey){
-                card = card1 > card2? card1 : card2;
-            }
+        // XXX do something different for equality vs. not equality
+        if (joinOp == Predicate.Op.EQUALS) {
+            Integer table2Id = tableAliasToId.get(table2Alias);
+            Integer table1Id = tableAliasToId.get(table1Alias);
+            String table1Name = Database.getCatalog().getTableName(table1Id);
+            String table2Name = Database.getCatalog().getTableName(table2Id);
+
+            TupleDesc t2TD = Database.getCatalog().getTupleDesc(table2Id);
+            TupleDesc t1TD = Database.getCatalog().getTupleDesc(table1Id);
+
+            int f2Idx = t2TD.fieldNameToIndex(field2PureName);
+
+            int f1Idx = t1TD.fieldNameToIndex(field1PureName);
+
+            if (t1pkey)
+//                card = Math.min(
+//                        (int) (card2
+//                                * stats.get(table2Name).avgSelectivity(f2Idx,
+//                                        joinOp) * card1), card2);
+             return card2;
+            else if (t2pkey)
+//                card = Math.min(
+//                        (int) (card2
+//                                * stats.get(table1Name).avgSelectivity(f1Idx,
+//                                        joinOp) * card1), card1);
+             return card1;
+            else
+//                card = (int) Math.min(
+//                        card2
+//                                * stats.get(table1Name).avgSelectivity(f1Idx,
+//                                        joinOp) * card1,
+//                        card2
+//                                * stats.get(table2Name).avgSelectivity(f2Idx,
+//                                        joinOp) * card1);
+
+             if (card1 > card2)
+             return card1;
+             else
+             return card2;
         } else {
-            card = (int) (card1 * card2 * 0.3);
+            card = (int) (card1 * card2 * .3);
         }
-        // some code goes here
         return card <= 0 ? 1 : card;
     }
 
@@ -233,66 +278,45 @@ public class JoinOptimizer {
             HashMap<String, TableStats> stats,
             HashMap<String, Double> filterSelectivities, boolean explain)
             throws ParsingException {
-        //Not necessary for labs 1--3
 
-        // some code goes here
+        Vector<LogicalJoinNode> bestSoFar = new Vector<LogicalJoinNode>();
+        int minCostCard = 0;
+        double minCostThisSubset = 0.0;
+
         PlanCache pc = new PlanCache();
-        for (int i = 1; i <= joins.size() ; i++) {
-            for (Set<LogicalJoinNode> es : enumerateSubsets(joins,i)){
-                Vector<LogicalJoinNode> bestPlan = null;
-                double tempBestSoFar = Double.MAX_VALUE;
-                int tempCard = 0;
-                for (LogicalJoinNode joinToRemove : es){
-                    CostCard cc = computeCostAndCardOfSubplan(stats,filterSelectivities,joinToRemove,es,tempBestSoFar,pc);
-                    if (cc != null){
-                        tempBestSoFar = cc.cost;
-                        tempCard = cc.card;
-                        bestPlan = cc.plan;
-                    }
+
+        for (int i = 0; i < joins.size(); i++) {
+            // loop through all subsets of size i
+            Set<Set<LogicalJoinNode>> subsets = enumerateSubsets(joins, i + 1);
+            for (Set<LogicalJoinNode> s : subsets) {
+                minCostThisSubset = Double.MAX_VALUE;
+                minCostCard = 0;
+                bestSoFar = new Vector<LogicalJoinNode>();
+
+                // for each subset, remove one element, compute best way to add
+                // it into remainder
+                for (LogicalJoinNode j : s) {
+                    CostCard cc;
+
+                    cc = computeCostAndCardOfSubplan(stats,
+                            filterSelectivities, j, s, minCostThisSubset, pc);
+                    if (cc == null)
+                        continue;
+
+                    bestSoFar = cc.plan;
+                    minCostThisSubset = cc.cost;
+                    minCostCard = cc.card;
                 }
-                pc.addPlan(es,tempBestSoFar,tempCard,bestPlan);
+
+                if (minCostThisSubset != Double.MAX_VALUE) {
+                    pc.addPlan(s, minCostThisSubset, minCostCard, bestSoFar);
+                }
+
             }
-
         }
-        Set<LogicalJoinNode> tempSet = new HashSet<>();
-        for(Iterator<LogicalJoinNode> it = joins.iterator();it.hasNext();){
-            tempSet.add(it.next());
-        }
-        return pc.getOrder(tempSet);
-//        Replace the following
-//        PlanCache planCache = new PlanCache();
-//        Vector<LogicalJoinNode> nodeVector = new Vector<>();
-//
-//        for (int i = 1; i <= joins.size(); i++) {
-//            Set<Set<LogicalJoinNode>> sets = this.enumerateSubsets(this.joins, i);
-//            Iterator<Set<LogicalJoinNode>> setIterator = sets.iterator();
-//
-//            while (setIterator.hasNext())
-//            {
-//                Set<LogicalJoinNode> s = setIterator.next();
-//                planCache.addPlan(s, Double.MAX_VALUE, 0, null);
-//
-//                Iterator<LogicalJoinNode> nodeIterator = s.iterator();
-//                while (nodeIterator.hasNext())
-//                {
-//                    LogicalJoinNode toRemove = nodeIterator.next();
-//                    double curCost = planCache.getCost(s);
-//                    Set<LogicalJoinNode> joinSet = new HashSet<>(s);
-//                    joinSet.remove(toRemove);
-//
-//                    CostCard costCard = this.computeCostAndCardOfSubplan(
-//                            stats, filterSelectivities, toRemove, joinSet, curCost, planCache);
-//                    if (costCard != null && costCard.cost < curCost)
-//                    {
-//                        planCache.addPlan(s, costCard.cost, costCard.card, costCard.plan);
-//                        nodeVector = costCard.plan;
-//                    }
-//                }
-//            }
-//        }
-//
-//        return nodeVector;
-
+        if (explain)
+            printJoins(bestSoFar, pc, stats, filterSelectivities);
+        return bestSoFar;
     }
 
     // ===================== Private Methods =================================
